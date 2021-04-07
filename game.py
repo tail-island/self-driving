@@ -11,7 +11,7 @@ from simulator import Car, Obstacle, Star
 from ui import create_surface
 
 
-FPS = 30
+FPS = 15
 OBSTACLE_COUNT = 40
 STAR_COUNT = 2
 GAME_PERIOD_SEC = 60
