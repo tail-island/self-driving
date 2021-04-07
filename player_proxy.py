@@ -4,9 +4,11 @@ from subprocess import Popen, PIPE
 
 
 class PlayerProxy:
-    def __init__(self, program_path):
-        self.stderr = open(f'./players/{program_path}-log.txt', mode='a')
-        self.process = Popen((f'./{program_path}',), cwd='./players', stdin=PIPE, stdout=PIPE, stderr=self.stderr, universal_newlines=True)
+    def __init__(self, program_name):
+        self.name = program_name.replace('.bat', '')
+
+        self.stderr = open(f'./players/{program_name}-log.txt', mode='a')
+        self.process = Popen((f'./{program_name}',), cwd='./players', stdin=PIPE, stdout=PIPE, stderr=self.stderr, universal_newlines=True)
 
     def get_action(self, observation):
         self.process.stdin.write(f'{json.dumps(observation)}\n')

@@ -2,13 +2,13 @@ import pygame
 import pymunk.pygame_util
 import pymunk.space_debug_draw_options
 
-from funcy import juxt, mapcat
+from funcy import count, juxt, mapcat
 from simulator import Car, Star, Tire
 
 
-def draw_circle(options, left_top, shape, outline_color, fill_color):
+def _draw_circle(options, left_bottom, shape, outline_color, fill_color):
     options.draw_circle(
-        shape.offset + shape.body.position - left_top,
+        shape.offset + shape.body.position - left_bottom,
         shape.body.angle,
         shape.radius,
         outline_color,
@@ -16,26 +16,26 @@ def draw_circle(options, left_top, shape, outline_color, fill_color):
     )
 
 
-def draw_segment(options, left_top, shape, outline_color, fill_color):
+def _draw_segment(options, left_bottom, shape, outline_color, fill_color):
     options.draw_fat_segment(
-        shape.a + shape.body.position - left_top,
-        shape.b + shape.body.position - left_top,
+        shape.a + shape.body.position - left_bottom,
+        shape.b + shape.body.position - left_bottom,
         shape.radius,
         outline_color,
         fill_color
     )
 
 
-def draw_poly(options, left_top, shape, outline_color, fill_color):
+def _draw_poly(options, left_bottom, shape, outline_color, fill_color):
     options.draw_polygon(
-        tuple(map(lambda v: v.rotated(shape.body.angle) + shape.body.position - left_top, shape.get_vertices())),
+        tuple(map(lambda v: v.rotated(shape.body.angle) + shape.body.position - left_bottom, shape.get_vertices())),
         shape.radius,
         outline_color,
         fill_color
     )
 
 
-def create_surface(space):
+def _create_space_surface(space):
     def get_min_max_coordinate():
         coordinates = tuple(mapcat(lambda shape: (shape.bb.left, shape.bb.top, shape.bb.right, shape.bb.bottom), filter(lambda shape: shape.body.body_type == pymunk.Body.DYNAMIC, space.shapes)))
 
@@ -68,7 +68,7 @@ def create_surface(space):
     max_coordinate, min_coordinate = get_min_max_coordinate()
 
     size = (max_coordinate - min_coordinate, max_coordinate - min_coordinate)
-    left_top = (min_coordinate, min_coordinate)
+    left_bottom = (min_coordinate, min_coordinate)
 
     surface = pygame.surface.Surface(size)
     options = pymunk.pygame_util.DrawOptions(surface)
@@ -77,10 +77,33 @@ def create_surface(space):
         fill_color = get_fill_color(shape)
 
         if isinstance(shape, pymunk.shapes.Circle):
-            draw_circle(options, left_top, shape, fill_color, fill_color)
+            _draw_circle(options, left_bottom, shape, fill_color, fill_color)
         elif isinstance(shape, pymunk.shapes.Segment):
-            draw_segment(options, left_top, shape, fill_color, fill_color)
+            _draw_segment(options, left_bottom, shape, fill_color, fill_color)
         elif isinstance(shape, pymunk.shapes.Poly):
-            draw_poly(options, left_top, shape, fill_color, fill_color)
+            _draw_poly(options, left_bottom, shape, fill_color, fill_color)
+
+    return surface, *left_bottom, *size
+
+
+def create_surface(space, cars, players, actions):
+    space_surface, space_left, space_bottom, space_width, space_height = _create_space_surface(space)
+
+    surface = pygame.surface.Surface((800, 640))
+    font = pygame.font.Font(None, 24)
+
+    surface.blit(pygame.transform.smoothscale(space_surface, (640, 640)), (0, 0))
+
+    pygame.draw.rect(surface, (255, 255, 255), (640, 0, 800, 640))
+
+    for i, car, player, action in zip(count(), cars, players, actions):
+        surface.blit(font.render(player.name, True, (0, 0, 0)), (640 + 4, 80 * i + 4))
+
+        pygame.draw.line(surface, (64, 64, 64), ((640, 80 * i + 12)), ((car.position.x - space_left) * (640 / space_width), 640 - (car.position.y - space_bottom) * (640 / space_height)))
+
+        pygame.draw.line(surface, (192, 192, 192), (640 + 24 - 2, 80 * i + 48), (640 + 24 + 130 + 2, 80 * i + 48))
+
+        for j, action_value in zip(count(), action):
+            pygame.draw.rect(surface, (128, 128, 128), (640 + 24 + 50 * j, min(80 * i + 48, 80 * i + 48 - int(action_value * 20)), 30, abs(int(action_value * 20))))
 
     return surface

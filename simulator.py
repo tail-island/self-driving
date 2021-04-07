@@ -57,6 +57,9 @@ class Tire(Body):
         self._limit_velocity()
 
     def accelerate(self, force):
+        if force < 0:  # 後退は前進より遅くします。そうしないとひたすらバックで進む人がでちゃう。
+            force *= 0.5
+
         self.apply_force_at_local_point((force, 0))
 
     def brake(self, force):
@@ -231,8 +234,8 @@ if __name__ == '__main__':
         if keys[pygame.K_RIGHT]:
             car.steer(-20000)
 
-        space.step(1 / 30)
-        clock.tick(30)
+        space.step(1 / 60)
+        clock.tick(60)
 
         screen.fill((255, 255, 255))
         space.debug_draw(draw_options)

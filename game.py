@@ -1,22 +1,27 @@
+import pygame
 import pymunk
-import random
+import sys
 
-from funcy import concat, distinct, first, mapcat, repeatedly
+from funcy import concat, distinct, first, mapcat, repeat, repeatedly
 from math import pi
+from operator import attrgetter
+from player_proxy import PlayerProxy
+from random import Random
 from simulator import Car, Obstacle, Star
 from ui import create_surface
 
 
+FPS = 30
 OBSTACLE_COUNT = 40
 STAR_COUNT = 2
-GAME_PERIOD_SEC = 30
+GAME_PERIOD_SEC = 60
 
 
 class Game:
     @classmethod
     def _crash(cls, arbiter, space, data):
         for car in filter(lambda body: isinstance(body, Car), distinct(map(lambda body: body.car if hasattr(body, 'car') else body, map(lambda shape: shape.body, arbiter.shapes)))):
-            car.crash_energy = min(car.crash_energy + arbiter.total_ke / 2, 10 * 30 * 100000)
+            car.crash_energy = min(car.crash_energy + arbiter.total_ke / 2, 10 * FPS * 100000)
 
     @classmethod
     def _catch(cls, arbiter, space, data):
@@ -33,11 +38,10 @@ class Game:
         return False
 
     def _random_position(self, sigma):
-        return first(filter(lambda p: all(map(lambda b: (b.position - p).length >= 50, concat(self.cars, self.obstacles, self.stars))), filter(lambda p: 100 < p.length < 950, repeatedly(lambda: pymunk.Vec2d(random.gauss(0, sigma), 0).rotated(random.uniform(0, pi * 2))))))
+        return first(filter(lambda p: all(map(lambda b: (b.position - p).length >= 50, concat(self.cars, self.obstacles, self.stars))), filter(lambda p: 100 < p.length < 950, repeatedly(lambda: pymunk.Vec2d(self.game_random.gauss(0, sigma), 0).rotated(self.game_random.uniform(0, pi * 2))))))
 
     def _reset_star_position(self, star):
-        star.set_position_and_angle(self._random_position(300), random.uniform(0, pi * 2))
-        star.is_catched = False
+        star.set_position_and_angle(self._random_position(300), self.game_random.uniform(0, pi * 2))
 
     def _append_wall(self, a, b):
         wall = pymunk.Body(body_type=pymunk.Body.STATIC)
@@ -60,7 +64,7 @@ class Game:
 
     def _append_obstacle(self):
         obstacle = Obstacle(self.space)
-        obstacle.set_position_and_angle(self._random_position(500), random.uniform(0, pi * 2))
+        obstacle.set_position_and_angle(self._random_position(500), self.game_random.uniform(0, pi * 2))
 
         self.obstacles.append(obstacle)
 
@@ -71,11 +75,18 @@ class Game:
             shape.collision_type = 2
 
         self._reset_star_position(star)
+        star.is_catched = False
+
         self.stars.append(star)
 
-    def __init__(self, players):
+    def __init__(self, players, seed=None):
+        self.game_random = Random(seed)
+        self.control_random = Random(seed)
+
         self.players = players
+
         self.elapse = 0
+        self.actions = repeat((0, 0, 0), len(players))
 
         self.space = pymunk.Space()
 
@@ -113,7 +124,8 @@ class Game:
         return {
             'position': my_car.position,
             'angle': cls._normalize_relative_angle(my_car.angle),
-            'velocity': my_car.velocity.rotated(-my_car.angle) / 30,
+            'velocity_angle': cls._normalize_relative_angle(my_car.velocity.rotated(-my_car.angle).angle),
+            'velocity_length': my_car.velocity.rotated(-my_car.angle).length / FPS,
             'steering_angle': cls._normalize_relative_angle(my_car.tire_lf.angle - my_car.angle),
             'steering_torque': (my_car.tire_lf.moment * my_car.tire_lf.angular_velocity + my_car.tire_rf.moment * my_car.tire_rf.angular_velocity) / 20000,
             'score': my_car.score,
@@ -124,9 +136,10 @@ class Game:
     def _get_other_car_observation(cls, other_car, my_car):
         return {
             'position_angle': cls._normalize_relative_angle((other_car.position - my_car.position).rotated(-my_car.angle).angle),
-            'position_distance': (other_car.position - my_car.position).length,
-            'car_angle': cls._normalize_relative_angle(other_car.angle - my_car.angle),
-            'car_velocity': (other_car.velocity - my_car.velocity).rotated(-my_car.angle) / 30,
+            'position_length': (other_car.position - my_car.position).length,
+            'angle': cls._normalize_relative_angle(other_car.angle - my_car.angle),
+            'velocity_angle': cls._normalize_relative_angle((other_car.velocity - my_car.velocity).rotated(-my_car.angle).angle),
+            'velocity_length': (other_car.velocity - my_car.velocity).rotated(-my_car.angle).length / FPS,
             'steering_angle': cls._normalize_relative_angle(other_car.tire_lf.angle - other_car.angle),
             'score': other_car.score,
             'crash_energy': other_car.crash_energy / 100000,
@@ -136,7 +149,7 @@ class Game:
     def _get_obstacle_or_star_observation(cls, obstacle_or_star, my_car):
         return {
             'position_angle': cls._normalize_relative_angle((obstacle_or_star.position - my_car.position).rotated(-my_car.angle).angle),
-            'position_distance': (obstacle_or_star.position - my_car.position).length,
+            'position_length': (obstacle_or_star.position - my_car.position).length,
         }
 
     def create_observation(self, my_car):
@@ -147,75 +160,89 @@ class Game:
             'stars': tuple(map(lambda star: self._get_obstacle_or_star_observation(star, my_car), self.stars))
         }
 
+    @classmethod
+    def _clip(cls, value, min_value, max_value):
+        return min(max(value, min_value), max_value)
+
     def step(self):
         self.elapse += 1
+        self.actions = []
 
-        for car, player in zip(self.cars, self.players):
-            acceleration, braking, steering = player.get_action(self.create_observation(car))
+        for car, player in zip(self.cars, concat(self.players, repeat(None))):
+            # アクションを取得します。
+            acceleration, braking, steering = player.get_action(self.create_observation(car)) if player else (0, 0, 0)
 
+            # アクションを正規化します。
+            acceleration = self._clip(acceleration, -1, 1)
+            braking      = self._clip(braking,       0, 1)  # noqa: E221, E241
+            steering     = self._clip(steering,     -1, 1)  # noqa: E221, E241
+
+            # 正規化したアクションを記録します。
+            self.actions.append((acceleration, braking, steering))
+
+            # 衝突して故障した車は、修理が終わるまでは行動できません。
             if car.crash_energy > 0:
                 car.crash_energy = max(car.crash_energy - 100000, 0)
                 continue
 
+            # ゆらぎを出すために、アクションに小さな正規乱数を加えます。スターの次の出現位置が変わると強化学習が難しくなりそうなので、別のRandomインスタンスを使用します。
+            acceleration = self._clip(acceleration + self.control_random.gauss(0, 0.05), -1, 1)
+            braking      = self._clip(braking      + self.control_random.gauss(0, 0.05),  0, 1)  # noqa: E221, E241
+            steering     = self._clip(steering     + self.control_random.gauss(0, 0.05), -1, 1)  # noqa: E221
+
+            # アクションを実行します。
             car.accelerate(acceleration * 20000)
             car.brake(braking * 200000)
             car.steer(steering * 20000)
 
-        self.space.step(1 / 30)
+        self.space.step(1 / FPS)
 
-        for star in self.stars:
-            if star.is_catched:
-                self._reset_star_position(star)
+        for star in filter(lambda star: star.is_catched, self.stars):
+            self._reset_star_position(star)
+            star.is_catched = False
 
-        return self.elapse >= GAME_PERIOD_SEC * 30  # ゲームはGAME_PERIOD_SECで終了。
+        return self.elapse >= GAME_PERIOD_SEC * FPS  # ゲームはGAME_PERIOD_SECで終了します。
 
     def create_surface(self):
-        return create_surface(self.space)
+        return create_surface(self.space, self.cars, self.players, self.actions)
 
 
-if __name__ == '__main__':
-    import pygame
-    import sys
+def play(program_names, seed, screen):
+    game = Game(tuple(map(PlayerProxy, program_names)), seed=seed)
+    done = False
 
-    from funcy import last
-    from player_proxy import PlayerProxy
-
-    pygame.init()
-    pygame.display.set_caption('self driving')
-
-    pymunk.pygame_util.positive_y_is_up = True
-
-    screen = pygame.display.set_mode((640, 640))
-
-    game = Game((PlayerProxy('christine'),))
-
-    while True:
+    while not done:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 sys.exit(0)
 
-        car = last(game.cars)
+        done = game.step()
 
-        if car.crash_energy == 0:
-            keys = pygame.key.get_pressed()
-
-            if keys[pygame.K_UP]:
-                car.accelerate(20000)
-
-            if keys[pygame.K_DOWN]:
-                car.accelerate(-10000)
-
-            if keys[pygame.K_SPACE]:
-                car.brake(200000)
-
-            if keys[pygame.K_LEFT]:
-                car.steer( 20000)  # noqa: E201
-
-            if keys[pygame.K_RIGHT]:
-                car.steer(-20000)
-
-        if game.step():
-            break
-
-        screen.blit(pygame.transform.smoothscale(game.create_surface(), (640, 640)), (0, 0))
+        screen.blit(game.create_surface(), (0, 0))
         pygame.display.flip()
+
+    return zip(map(attrgetter('name'), game.players), map(attrgetter('score'), game.cars))
+
+
+if __name__ == '__main__':
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser()
+    parser.add_argument('program_names', metavar='PROGRAM-NAME', nargs='+', help='player program\'s name')
+    parser.add_argument('--seed', nargs='?', help='random seed')
+
+    args = parser.parse_args()
+
+    pygame.init()
+    pymunk.pygame_util.positive_y_is_up = True
+
+    pygame.display.set_caption('self driving')
+    screen = pygame.display.set_mode((800, 640))
+
+    for name, score in play(args.program_names, args.seed, screen):
+        print(f'{name}\t{score}')
+
+    # from PIL import Image
+
+    # images = tuple(map(lambda image: Image.frombuffer('RGB', (800, 640), image), images))
+    # images[0].save('game.gif', save_all=True, append_images=images[1:], duration=1 / 30 * 1000)
