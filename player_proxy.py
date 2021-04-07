@@ -1,4 +1,5 @@
 import json
+import os
 
 from subprocess import Popen, PIPE
 
@@ -8,10 +9,11 @@ class PlayerProxy:
         self.name = program_name.replace('.bat', '')
 
         self.stderr = open(f'./players/{program_name}-log.txt', mode='a')
-        self.process = Popen((f'./{program_name}',), cwd='./players', stdin=PIPE, stdout=PIPE, stderr=self.stderr, universal_newlines=True)
+        self.process = Popen((os.path.join('.', program_name),), cwd='./players', shell=True, stdin=PIPE, stdout=PIPE, stderr=self.stderr, universal_newlines=True)
 
     def get_action(self, observation):
         self.process.stdin.write(f'{json.dumps(observation)}\n')
+        self.process.stdin.flush()
 
         action = json.loads(self.process.stdout.readline())
 
