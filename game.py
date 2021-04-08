@@ -208,6 +208,8 @@ class Game:
 
 
 def play(program_names, seed, screen):
+    images = []
+
     game = Game(tuple(map(PlayerProxy, program_names)), seed=seed)
     done = False
 
@@ -217,19 +219,24 @@ def play(program_names, seed, screen):
                 sys.exit(0)
 
         done = game.step()
+        surface = game.create_surface()
 
-        screen.blit(game.create_surface(), (0, 0))
+        screen.blit(surface, (0, 0))
         pygame.display.flip()
 
-    return zip(map(attrgetter('name'), game.players), map(attrgetter('score'), game.cars))
+        images.append(pygame.image.tostring(surface, 'RGB'))
+
+    return map(attrgetter('name'), game.players), map(attrgetter('score'), game.cars), images
 
 
 if __name__ == '__main__':
     from argparse import ArgumentParser
+    from PIL import Image
 
     parser = ArgumentParser()
     parser.add_argument('program_names', metavar='PROGRAM-NAME', nargs='+', help='player program\'s name')
     parser.add_argument('--seed', nargs='?', help='random seed')
+    parser.add_argument('--animation', action='store_true', help='generate GIF animation')
 
     args = parser.parse_args()
 
@@ -239,10 +246,11 @@ if __name__ == '__main__':
     pygame.display.set_caption('self driving')
     screen = pygame.display.set_mode((800, 640))
 
-    for name, score in play(args.program_names, args.seed, screen):
+    names, scores, images = play(args.program_names, args.seed, screen)
+
+    for name, score in zip(names, scores):
         print(f'{name}\t{score}')
 
-    # from PIL import Image
-
-    # images = tuple(map(lambda image: Image.frombuffer('RGB', (800, 640), image), images))
-    # images[0].save('game.gif', save_all=True, append_images=images[1:], duration=1 / 30 * 1000)
+    if args.animation:
+        images = tuple(map(lambda image: Image.frombuffer('RGB', (800, 640), image), images))
+        images[0].save('game.gif', save_all=True, append_images=images[1:], duration=1 / 30 * 1000)
