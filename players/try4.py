@@ -56,44 +56,59 @@ def get_angle_to_go(observation):
 
 # デバッグ用に可視化します
 def visualize(observation):
+    # 描画関数。
     def plot_body(body, color, thickness=1):
         cv2.circle(image, (320 + int(np.cos(body['position_angle']) * body['position_length']), 320 - int(np.sin(body['position_angle']) * body['position_length'])), 5, color, thickness=thickness)
 
+    # 可視化用の画像を作成します。
     image = np.zeros((641, 641, 3), dtype=np.uint8)
 
+    # x軸とy軸を描画します。
     cv2.line(image, (0, 320), (640, 320), (128, 128, 128))
     cv2.line(image, (320, 0), (320, 640), (128, 128, 128))
 
+    # 他の参加者の自動車を描画します。
     for body in observation['other_cars']:
         plot_body(body, (255, 128, 128))
 
+    # 障害物を描画します。
     for body in observation['obstacles']:
         plot_body(body, (192, 192, 192))
 
+    # スターを表がします。
     for body in observation['stars']:
         plot_body(body, (128, 255, 128))
 
+    # try4のアルゴリズムをなぞります。
     nearest_star = get_nearest_star(observation)
     objects_to_avoid = get_objects_to_avoid(observation, nearest_star)
     object_to_avoid = get_object_to_avoid(observation, nearest_star)
 
+    # 一番近い星を緑で塗りつぶします。
     plot_body(nearest_star, (0, 255, 0), thickness=-1)
 
+    # 一番近い星の左右22.5度の線を描画します。この線の間にあるのが、避けるべき対象群。
     cv2.line(image, (320, 320), (320 + int(np.cos(nearest_star['position_angle'] - np.pi / 8) * nearest_star['position_length']), 320 - int(np.sin(nearest_star['position_angle'] - np.pi / 8) * nearest_star['position_length'])), (128, 128, 192))
     cv2.line(image, (320, 320), (320 + int(np.cos(nearest_star['position_angle'] + np.pi / 8) * nearest_star['position_length']), 320 - int(np.sin(nearest_star['position_angle'] + np.pi / 8) * nearest_star['position_length'])), (128, 128, 192))
 
-    for body in objects_to_avoid:
-        plot_body(body, (0, 0, 255))
-
     if object_to_avoid:
-        angle_1 = normalize_angle(object_to_avoid['position_angle'] - np.pi / 4)
-        angle_2 = normalize_angle(object_to_avoid['position_angle'] + np.pi / 4)
-        angle_to_go = get_angle_to_go(observation)
+        # 避けるべき対象群を赤で描画します。
+        for body in objects_to_avoid:
+            plot_body(body, (0, 0, 255))
 
+        # 避けるべき対象を赤で塗りつぶします。
         plot_body(object_to_avoid, (0, 0, 255), thickness=-1)
 
+        # try4のアルゴリズムをなぞります。
+        angle_1 = normalize_angle(object_to_avoid['position_angle'] + np.pi / 4)
+        angle_2 = normalize_angle(object_to_avoid['position_angle'] - np.pi / 4)
+        angle_to_go = get_angle_to_go(observation)
+
+        # 障害物の左を抜けるコースと、障害物の右を抜けるコースを薄い緑で描画します。
         cv2.line(image, (320, 320), (320 + int(np.cos(angle_1) * 32), 320 - int(np.sin(angle_1) * 32)), (128, 192, 128))
         cv2.line(image, (320, 320), (320 + int(np.cos(angle_2) * 32), 320 - int(np.sin(angle_2) * 32)), (128, 192, 128))
+
+        # 進もうとしているコースを、緑で長めに描画します。
         cv2.line(image, (320, 320), (320 + int(np.cos(angle_to_go) * 64), 320 - int(np.sin(angle_to_go) * 64)), (0, 255, 0))
 
     cv2.imshow('observation', image)

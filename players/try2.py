@@ -20,8 +20,8 @@ class SteerAndAccel:
         # ブレーキはつかいません！
         braking = 0
 
-        # 最も近いスターの角度に合わせて、ステアリングを切ります。アクセルを弱めたので、steerの2倍の強さでハンドルを切ってみました。
-        steering = nearest_star['position_angle'] * 2
+        # 最も近いスターの角度に合わせて、ステアリングを切ります。
+        steering = nearest_star['position_angle']
 
         # アクションを返します。
         return acceleration, braking, steering

@@ -117,7 +117,7 @@ class Game:
     def _normalize_relative_angle(cls, angle):
         result = cls._normalize_angle(angle)
 
-        return result if result < pi else result - pi * 2
+        return result if result <= pi else result - pi * 2
 
     @classmethod
     def _get_my_car_observation(cls, my_car):
