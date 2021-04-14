@@ -142,7 +142,7 @@ class Game:
             'velocity_length': (other_car.velocity - my_car.velocity).rotated(-my_car.angle).length / FPS,
             'steering_angle': cls._normalize_relative_angle(other_car.tire_lf.angle - other_car.angle),
             'score': other_car.score,
-            'crash_energy': other_car.crash_energy / 100000,
+            'crash_energy': other_car.crash_energy / 100000
         }
 
     @classmethod

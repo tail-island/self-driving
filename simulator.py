@@ -4,6 +4,9 @@ import pymunk.pygame_util
 from math import pi
 
 
+MAX_SPEED = 300
+
+
 class Body(pymunk.Body):
     def __init__(self):
         super().__init__()
@@ -44,8 +47,8 @@ class Tire(Body):
         self.torque -= self.moment * self.angular_velocity * (1 / dt) * 0.1  # 現実では速度と関係がありそう……。据え切りは重いけど、動いていれば軽いですもんね。
 
     def _limit_velocity(self):
-        if self.velocity.length > 300:
-            self.velocity *= 300 / self.velocity.length
+        if self.velocity.length > MAX_SPEED:
+            self.velocity *= MAX_SPEED / self.velocity.length
 
     def _update_velocity(self, body, gravity, damping, dt):
         pymunk.Body.update_velocity(body, gravity, damping, dt)

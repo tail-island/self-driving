@@ -8,8 +8,8 @@ class PlayerProxy:
     def __init__(self, program_name):
         self.name = program_name.replace('.bat', '')
 
-        self.stderr = open(f'./players/{program_name}-log.txt', mode='a')
-        self.process = Popen((os.path.join('.', program_name),), cwd='./players', shell=True, stdin=PIPE, stdout=PIPE, stderr=self.stderr, universal_newlines=True)
+        self.stderr = open(os.path.join('.', 'players', f'{program_name}-log.txt'), mode='a')
+        self.process = Popen((os.path.join('.', program_name),), cwd=os.path.join('.', 'players'), shell=True, stdin=PIPE, stdout=PIPE, stderr=self.stderr, universal_newlines=True)
 
     def get_action(self, observation):
         self.process.stdin.write(f'{json.dumps(observation)}\n')
