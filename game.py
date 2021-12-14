@@ -231,8 +231,11 @@ def play(program_names, seed, screen, need_images=False):
 
 
 if __name__ == '__main__':
+    import cv2 as cv
+    import numpy as np
+
     from argparse import ArgumentParser
-    from PIL import Image
+    # from subprocess import run
 
     parser = ArgumentParser()
     parser.add_argument('program_names', metavar='PROGRAM-NAME', nargs='+', help='player program\'s name')
@@ -249,9 +252,13 @@ if __name__ == '__main__':
 
     names, scores, images = play(args.program_names, args.seed, screen, need_images=args.animation)
 
+    # run('taskkill /im TestDrive.exe /f /t')
+
     for name, score in zip(names, scores):
         print(f'{name}\t{score}')
 
     if args.animation:
-        images = tuple(map(lambda image: Image.frombuffer('RGB', (800, 640), image), images))
-        images[0].save('game.gif', save_all=True, append_images=images[1:], duration=1 / 30 * 1000)
+        animation_writer = cv.VideoWriter('game.mp4', cv.VideoWriter_fourcc(*'mp4v'), 30, (800, 640))
+        for image in map(lambda image: cv.cvtColor(np.reshape(np.frombuffer(image, np.uint8), (640, 800, 3)), cv.COLOR_RGB2BGR), images):
+            animation_writer.write(image)
+        animation_writer.release()

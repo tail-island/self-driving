@@ -97,7 +97,7 @@ def create_surface(space, cars, players, actions):
     pygame.draw.rect(surface, (255, 255, 255), (640, 0, 800, 640))
 
     for i, car, player, action in zip(count(), cars, players, actions):
-        surface.blit(font.render(player.name, True, (0, 0, 0)), (640 + 4, 80 * i + 4))
+        surface.blit(font.render(f'{player.name}: {car.score:02}', True, (0, 0, 0)), (640 + 4, 80 * i + 4))
 
         pygame.draw.line(surface, (64, 64, 64), ((640, 80 * i + 12)), ((car.position.x - space_left) * (640 / space_width), 640 - (car.position.y - space_bottom) * (640 / space_height)))
 
