@@ -3,4 +3,3 @@ funcy==1.15
 opencv_python==4.5.1.48
 numpy==1.20.1
 pygame==2.0.1
-Pillow==8.2.0
